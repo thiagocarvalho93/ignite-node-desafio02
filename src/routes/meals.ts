@@ -29,7 +29,7 @@ export async function mealsRoutes(app: FastifyInstance) {
         session_id: sessionId,
         id,
       })
-      .first()
+      .select()
 
     return { meal }
   })
@@ -40,10 +40,33 @@ export async function mealsRoutes(app: FastifyInstance) {
     async (request) => {
       const { sessionId } = request.cookies
 
-      const summary = await knex('meals')
+      const mealsResponse = await knex('meals')
         .where('session_id', sessionId)
-        // .sum('', { as: '' })
-        .first()
+        .orderBy('datetime')
+        .select()
+
+      const meals = mealsResponse.length
+      const onDiet = mealsResponse.filter((meal) => meal.diet === 'y').length
+      const notOnDiet = meals - onDiet
+      const bestSequence = mealsResponse.reduce(
+        (result, obj) => {
+          if (obj.diet === 'y') {
+            result.currentCount++
+            result.maxCount = Math.max(result.maxCount, result.currentCount)
+          } else {
+            result.currentCount = 0
+          }
+          return result
+        },
+        { currentCount: 0, maxCount: 0 },
+      ).maxCount
+
+      const summary = {
+        meals,
+        on_diet: onDiet,
+        not_on_diet: notOnDiet,
+        bestSequence,
+      }
 
       return { summary }
     },
@@ -53,7 +76,7 @@ export async function mealsRoutes(app: FastifyInstance) {
     const createMealBodySchema = z.object({
       name: z.string(),
       description: z.string(),
-      datetime: z.coerce.date(),
+      datetime: z.string().datetime(),
       diet: z.enum(['y', 'n']),
     })
 
