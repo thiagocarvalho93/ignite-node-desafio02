@@ -65,7 +65,7 @@ export async function mealsRoutes(app: FastifyInstance) {
         meals,
         on_diet: onDiet,
         not_on_diet: notOnDiet,
-        bestSequence,
+        best_sequence: bestSequence,
       }
 
       return { summary }
@@ -95,18 +95,44 @@ export async function mealsRoutes(app: FastifyInstance) {
       })
     }
 
-    await knex('meals').insert({
-      id: randomUUID(),
-      name,
-      description,
-      session_id: sessionId,
-      datetime,
-      diet,
-    })
+    const inserted = await knex('meals')
+      .insert({
+        id: randomUUID(),
+        name,
+        description,
+        session_id: sessionId,
+        datetime,
+        diet,
+      })
+      .returning('*')
 
-    return reply.status(201).send()
+    return reply.status(201).send(inserted)
   })
 
   // TODO: PUT
-  // TODO: DELETE
+
+  app.delete(
+    '/:id',
+    { preHandler: [checkSessionIdExists] },
+    async (request, reply) => {
+      const getMealParamsSchema = z.object({
+        id: z.string().uuid(),
+      })
+      const { sessionId } = request.cookies
+
+      const { id } = getMealParamsSchema.parse(request.params)
+      const deletedRows = await knex('meals')
+        .where({
+          session_id: sessionId,
+          id,
+        })
+        .delete()
+
+      if (deletedRows === 0) {
+        return reply.code(404).send()
+      }
+
+      return reply.code(204).send()
+    },
+  )
 }
