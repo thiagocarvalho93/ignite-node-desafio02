@@ -2,6 +2,7 @@ import { it, beforeAll, afterAll, describe, expect, beforeEach } from 'vitest'
 import { execSync } from 'node:child_process'
 import app from '../src/app'
 import request from 'supertest'
+import { randomUUID } from 'node:crypto'
 
 describe('Meals routes', () => {
   beforeAll(async () => {
@@ -103,9 +104,84 @@ describe('Meals routes', () => {
     ])
   })
 
-  it.todo('should be able to edit a meal', async () => {})
+  it('should be able to edit a meal', async () => {
+    let name = 'Breakfast'
+    let datetime = new Date().toISOString()
+    let description = 'Bacon and eggs'
+    let diet = 'y'
 
-  it.todo('should not be able to edit another users meal', async () => {})
+    const createMealResponse = await request(app.server).post('/meals').send({
+      name,
+      description,
+      datetime,
+      diet,
+    })
+
+    const cookies = createMealResponse.get('Set-Cookie')
+    const id = createMealResponse.body[0].id
+
+    name = 'Lunch'
+    description = 'Descrition test'
+    datetime = new Date(2023, 2, 2).toISOString()
+    diet = 'n'
+
+    await request(app.server)
+      .put(`/meals/${id}`)
+      .send({
+        name,
+        description,
+        datetime,
+        diet,
+      })
+      .set('Cookie', cookies)
+      .expect(204)
+
+    const listMealsResponse = await request(app.server)
+      .get('/meals')
+      .set('Cookie', cookies)
+      .expect(200)
+
+    expect(listMealsResponse.body.meals).toEqual([
+      expect.objectContaining({
+        name,
+        description,
+        datetime,
+        diet,
+      }),
+    ])
+  })
+
+  it('should not be able to edit another users meal', async () => {
+    let name = 'Breakfast'
+    let datetime = new Date().toISOString()
+    let description = 'Bacon and eggs'
+    let diet = 'y'
+
+    const createMealResponse = await request(app.server).post('/meals').send({
+      name,
+      description,
+      datetime,
+      diet,
+    })
+
+    const id = createMealResponse.body[0].id
+
+    name = 'Lunch'
+    description = 'Descrition test'
+    datetime = new Date(2023, 2, 2).toISOString()
+    diet = 'n'
+
+    await request(app.server)
+      .put(`/meals/${id}`)
+      .send({
+        name,
+        description,
+        datetime,
+        diet,
+      })
+      .set('Cookie', randomUUID())
+      .expect(401)
+  })
 
   it('should be able to delete a meal', async () => {
     const name = 'Breakfast'
@@ -121,13 +197,7 @@ describe('Meals routes', () => {
     })
 
     const cookies = createMealResponse.get('Set-Cookie')
-
-    const listMealsResponse = await request(app.server)
-      .get('/meals')
-      .set('Cookie', cookies)
-      .expect(200)
-
-    const id = listMealsResponse.body.meals[0].id
+    const id = createMealResponse.body[0].id
 
     await request(app.server)
       .delete(`/meals/${id}`)
